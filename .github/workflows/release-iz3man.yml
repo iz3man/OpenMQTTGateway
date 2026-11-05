@@ -1,0 +1,79 @@
+# iz3man fork: build and publish the lilygo-rtl_433-fsk-iz3man firmware
+#
+# Usage: set OMG_VERSION in environments.ini ([env:lilygo-rtl_433-fsk-iz3man]),
+# commit, then push a tag with exactly that name, e.g.
+#   git tag v1.8.1-iz3man && git push origin v1.8.1-iz3man
+#
+# The release gets the assets the gateway's OTA code expects:
+#   - lilygo-rtl_433-fsk-iz3man-firmware.bin  (OTA / WebUI file upload)
+#   - lilygo-rtl_433-fsk-iz3man-factory.bin   (first flash via esptool at 0x0)
+#   - latest_version.json                     (update check / HA update entity)
+name: Release (iz3man)
+
+on:
+  push:
+    tags:
+      - "v*-iz3man*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PIO_ENV: lilygo-rtl_433-fsk-iz3man
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches OMG_VERSION
+        id: version
+        run: |
+          VERSION=$(sed -n '/^\[env:'"$PIO_ENV"'\]/,/^\[env:/p' environments.ini \
+            | grep -o "OMG_VERSION=\"[^\"]*\"" | head -1 | cut -d'"' -f2)
+          echo "OMG_VERSION in environments.ini: $VERSION"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "$VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match OMG_VERSION $VERSION"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('platformio.ini', 'environments.ini') }}
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Build firmware
+        run: pio run -e "$PIO_ENV"
+
+      - name: Prepare release assets
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p dist
+          cp ".pio/build/$PIO_ENV/firmware.bin" "dist/$PIO_ENV-firmware.bin"
+          cp ".pio/build/$PIO_ENV/firmware.factory.bin" "dist/$PIO_ENV-factory.bin"
+          jq -n --arg v "$VERSION" \
+            --arg url "https://github.com/${GITHUB_REPOSITORY}/releases/tag/$VERSION" \
+            --arg sum "Bresser fix build (rtl_433_ESP 0.6.2), $PIO_ENV" \
+            '{latest_version: $v, release_url: $url, release_summary: $sum}' > dist/latest_version.json
+          cat dist/latest_version.json
+          ls -la dist
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          make_latest: true
+          files: dist/*

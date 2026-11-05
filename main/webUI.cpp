@@ -24,6 +24,7 @@
 #include "User_config.h"
 #if defined(ZwebUI) && defined(ESP32)
 #  include <SPIFFS.h>
+#  include <Update.h>
 #  include <WebServer.h> // Docs for this are here - https://github.com/espressif/arduino-esp32/tree/master/libraries/WebServer
 #  include <WiFi.h>
 
@@ -83,6 +84,7 @@ extern void XtoSYS(const char* topicOri, JsonObject& SYSdata);
 extern void SYSConfig_save();
 extern String stateMeasures();
 extern void MQTTHttpsFWUpdate(const char* topicOri, JsonObject& HttpsFwUpdateData);
+extern bool ProcessLock;
 extern void receivingDATA(const char* topicOri, const char* datacallback);
 
 /*------------------- Web Console Globals ----------------------*/
@@ -1719,6 +1721,70 @@ void handleUP() {
   sendBodyChunk(upgrade_body, jsonChar, gateway_name, systemUrl.c_str());
   sendFooterChunk();
 }
+
+/**
+ * @brief /U2 - Firmware upgrade by local file upload (POST multipart/form-data)
+ * Expects the application image (<env>-firmware.bin), not the factory image.
+ */
+static bool uploadAuthorized = false;
+static bool uploadFailed = false;
+static String uploadError;
+
+void handleUploadData() {
+  HTTPUpload& upload = server.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    uploadAuthorized = !webUISecure || server.authenticate(www_username, ota_pass);
+    uploadFailed = false;
+    uploadError = "";
+    if (!uploadAuthorized) {
+      uploadFailed = true;
+      uploadError = "Not authorized";
+      return;
+    }
+    THEENGS_LOG_WARNING(F("[WebUI] Firmware upload started: %s" CR), upload.filename.c_str());
+    ProcessLock = true;
+    gatewayState = GatewayState::LOCAL_OTA_IN_PROGRESS;
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_FLASH)) {
+      uploadFailed = true;
+      uploadError = Update.errorString();
+    }
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (!uploadAuthorized || uploadFailed) return;
+    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      uploadFailed = true;
+      uploadError = Update.errorString();
+      Update.abort();
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (!uploadAuthorized || uploadFailed) return;
+    if (Update.end(true)) {
+      THEENGS_LOG_WARNING(F("[WebUI] Firmware upload done: %u bytes" CR), upload.totalSize);
+    } else {
+      uploadFailed = true;
+      uploadError = Update.errorString();
+    }
+  } else if (upload.status == UPLOAD_FILE_ABORTED) {
+    uploadFailed = true;
+    uploadError = "Upload aborted";
+    Update.abort();
+  }
+}
+
+void handleUploadDone() {
+  WEBUI_TRACE_LOG(F("handleUploadDone: uri: %s, method: %d" CR), server.uri(), server.method());
+  if (!uploadAuthorized) {
+    return server.requestAuthentication(DIGEST_AUTH, gateway_name, authFailResponse);
+  }
+  if (uploadFailed) {
+    THEENGS_LOG_ERROR(F("[WebUI] Firmware upload failed: %s" CR), uploadError.c_str());
+    gatewayState = GatewayState::ERROR;
+    ProcessLock = false;
+    server.send(500, "text/plain", "Firmware upload failed: " + uploadError + "\nPlease go back and retry.");
+    return;
+  }
+  sendRestartPage();
+  ESPRestart(6);
+}
 #  endif
 
 void sendRestartPage() {
@@ -1848,6 +1914,7 @@ void WebUISetup() {
   server.on("/cs", handleCS); // Console
 #  if defined(ESP32) && defined(MQTT_HTTPS_FW_UPDATE)
   server.on("/up", handleUP); // Firmware Upgrade
+  server.on("/u2", HTTP_POST, handleUploadDone, handleUploadData); // Firmware upgrade by file upload
 #  endif
   server.on("/cn", handleCN); // Configuration
   server.on("/wi", HTTP_GET, handleWI); // Scan for WiFi networks (GET link)

@@ -244,6 +244,8 @@
 // If used, this should be set to the root CA certificate of the server hosting the firmware.
 #  ifdef PRIVATE_CERTS
 #    include "certs/private_ota_cert.h"
+#  elif defined(GITHUB_OTA_CERTS)
+#    include "certs/github_ota_cert.h" // root CAs for firmware updates from GitHub releases
 #  else
 #    include "certs/default_ota_cert.h"
 #  endif
@@ -258,9 +260,15 @@
 #      define OTA_JSON_URL "https://ota.openmqttgateway.com/binaries/latest_version.json" //OTA url used to discover new versions of the firmware
 #    endif
 #  endif
-#  define ENTITY_PICTURE   "https://github.com/1technophile/OpenMQTTGateway/raw/development/docs/img/Openmqttgateway_logo_mini_margins.png"
-#  define RELEASE_LINK_DEV "https://ota.openmqttgateway.com/binaries/dev/"
-#  define RELEASE_LINK     "https://ota.openmqttgateway.com/binaries/"
+#  ifndef ENTITY_PICTURE
+#    define ENTITY_PICTURE "https://github.com/1technophile/OpenMQTTGateway/raw/development/docs/img/Openmqttgateway_logo_mini_margins.png"
+#  endif
+#  ifndef RELEASE_LINK_DEV // may be overridden by a build flag to use another OTA server
+#    define RELEASE_LINK_DEV "https://ota.openmqttgateway.com/binaries/dev/"
+#  endif
+#  ifndef RELEASE_LINK // may be overridden by a build flag to use another OTA server
+#    define RELEASE_LINK "https://ota.openmqttgateway.com/binaries/"
+#  endif
 #else
 static const char* OTAserver_cert = "";
 #endif
