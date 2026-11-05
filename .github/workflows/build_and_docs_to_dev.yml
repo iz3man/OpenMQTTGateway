@@ -1,9 +1,12 @@
 name: Build binaries, docs and publish to dev folder
 
+# iz3man fork: automatic triggers disabled (upstream CI, fails in the fork). Original:
+#   on:
+#     workflow_dispatch:
+#     schedule:
+#       - cron: "0 0 * * *"
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 0 * * *"
 
 jobs:
   prepare:

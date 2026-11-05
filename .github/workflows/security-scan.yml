@@ -1,8 +1,38 @@
 name: Security Scan
 
+# iz3man fork: automatic triggers disabled (upstream CI, fails in the fork). Original:
+#   on:
+#     schedule:
+#       - cron: '0 2 * * 1'  # Every Monday at 2 AM
+#     workflow_dispatch:
+#       inputs:
+#         severity:
+#           description: 'Severity levels to scan'
+#           required: false
+#           type: choice
+#           default: 'HIGH,CRITICAL'
+#           options:
+#             - 'CRITICAL'
+#             - 'HIGH,CRITICAL'
+#             - 'MEDIUM,HIGH,CRITICAL'
+#             - 'LOW,MEDIUM,HIGH,CRITICAL'
+#         scan-path:
+#           description: 'Path to scan (default: entire repo)'
+#           required: false
+#           type: string
+#           default: '.'
+#         exit-on-error:
+#           description: 'Fail if vulnerabilities found'
+#           required: false
+#           type: boolean
+#           default: false
+#     pull_request:
+#       paths:
+#         - 'main/**'
+#         - 'lib/**'
+#         - 'platformio.ini'
+#         - '.github/workflows/**'
 on:
-  schedule:
-    - cron: '0 2 * * 1'  # Every Monday at 2 AM
   workflow_dispatch:
     inputs:
       severity:
@@ -25,12 +55,6 @@ on:
         required: false
         type: boolean
         default: false
-  pull_request:
-    paths:
-      - 'main/**'
-      - 'lib/**'
-      - 'platformio.ini'
-      - '.github/workflows/**'
 
 jobs:
   security-scan:

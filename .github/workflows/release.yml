@@ -1,8 +1,11 @@
 name: Release
 
+# iz3man fork: automatic triggers disabled (upstream CI, fails in the fork). Original:
+#   on:
+#     release:
+#       types: [published]
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
 
 jobs:
   prepare:
