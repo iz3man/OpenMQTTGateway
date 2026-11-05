@@ -3,6 +3,8 @@
 # Usage: set OMG_VERSION in environments.ini ([env:lilygo-rtl_433-fsk-iz3man]),
 # commit, then push a tag with exactly that name, e.g.
 #   git tag v1.8.1-iz3man && git push origin v1.8.1-iz3man
+# or run it manually (Actions -> Release (iz3man) -> Run workflow on the
+# branch); the tag named after OMG_VERSION is then created on that commit.
 #
 # The release gets the assets the gateway's OTA code expects:
 #   - lilygo-rtl_433-fsk-iz3man-firmware.bin  (OTA / WebUI file upload)
@@ -74,6 +76,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.version }}
+          # on manual runs the tag does not exist yet: create it on the built
+          # commit (the API default would be the repo's default branch)
+          target_commitish: ${{ github.sha }}
           name: ${{ steps.version.outputs.version }}
           make_latest: true
           files: dist/*
